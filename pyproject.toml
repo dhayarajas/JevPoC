@@ -14,3 +14,4 @@ ignore = ["E501", "B905"]  # long cue/template strings; zip lengths are equal by
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
