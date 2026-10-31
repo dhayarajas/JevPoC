@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from jevpoc.masking import token
@@ -23,13 +24,32 @@ def site_token(element: str) -> str:
     return token("SITE", site) + (f"/{rest}" if rest else "")
 
 
+SITE_CODE = re.compile(r"\b[A-Z]{3}\d{3,5}\b")  # CLLI-style site codes such as NYC0412
+
+
+def scrub_sites(obj: Any, sites: set[str]) -> Any:
+    """Replace known and site-code-shaped identifiers in free text with the same site tokens."""
+    if isinstance(obj, dict):
+        return {k: scrub_sites(v, sites) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [scrub_sites(v, sites) for v in obj]
+    if isinstance(obj, str):
+        for s in sorted(sites, key=len, reverse=True):
+            obj = re.sub(rf"\b{re.escape(s)}\b", token("SITE", s), obj)
+        return SITE_CODE.sub(lambda m: token("SITE", m.group(0)), obj)
+    return obj
+
+
 def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:
+    sites = {a["element"].split("/")[0] for a in ctx["alarms"]}
     seen, alarms = set(), []
     for a in sorted(ctx["alarms"], key=lambda a: a["time"]):
         key = (a["element"], a["text"])
         if key not in seen:
             seen.add(key)
-            alarms.append({"time": a["time"], "element": site_token(a["element"]), "text": a["text"]})
+            alarms.append(
+                {"time": a["time"], "element": site_token(a["element"]), "text": scrub_sites(a["text"], sites)}
+            )
     k = ctx.get("kpis", {})
     return {
         "alarms": alarms[-20:],
@@ -39,7 +59,7 @@ def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:
             "drop_rate": band(k.get("drop_rate_pct", 0), [1, 3], ["normal", "elevated", "high"]),
             "availability": band(k.get("availability_pct", 100), [95, 99.5], ["down", "degraded", "normal"]),
         },
-        "recent_changes": ctx.get("recent_changes", []),
+        "recent_changes": scrub_sites(ctx.get("recent_changes", []), sites),
     }
 
 

@@ -102,13 +102,15 @@ def questions(entry, ctx):
 def policy(resp, ctx, th):
     intent = resp.choice("intent")
     conf = resp.confidence("intent")
-    lang = "en"
-    if "language" in resp.answers and resp.confidence("language") >= th.get("language_min", 0):
-        lang = resp.choice("language")
+    lang = "en"  # v1 responses carry no language answer
+    if "language" in resp.answers:
+        lang = resp.choice("language") if resp.confidence("language") >= th.get("language_min", 0) else "unsure"
     queue = QUEUES[intent] + ("_es" if lang == "es" else "")
     details = {"intent": intent, "confidence": round(conf, 3), "queue": queue, "language": lang}
     if lang == "other":
         return "agent", "language_not_supported", details
+    if lang == "unsure":
+        return "agent", "language_uncertain", details
     if resp.noul("needs_human") >= th["needs_human"]:
         return "agent", "customer_asked_for_human", details
     if resp.noul("in_scope") < th["in_scope_min"]:
