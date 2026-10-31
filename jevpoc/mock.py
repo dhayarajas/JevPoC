@@ -21,6 +21,11 @@ from jevpoc.client import JevError, JevResponse, JevTimeout, build_request
 
 # Cue phrases per question id and option (choice) or polarity (noul).
 CHOICE_CUES: dict[str, dict[str, list[str]]] = {
+    "language": {
+        "es": ["hola", "quiero", "factura", "por favor", "mi ", "no funciona", "gracias", "cuenta", "señal", "¿"],
+        "en": [" the ", " my ", " is ", " i ", "i'm", " and ", " you", "please", "what", "how"],
+        "other": ["bonjour", "merci", "obrigado", "danke", "xin chào"],
+    },
     "department": {
         "billing": ["charge", "bill", "refund", "invoice", "subscription"],
         "technical": ["error", "500", "crash", "integration", "bug", "not working"],
@@ -28,6 +33,8 @@ CHOICE_CUES: dict[str, dict[str, list[str]]] = {
     },
     "intent": {
         "billing_question": [
+            "factura",
+            "cargo",
             "amount",
             "invoice",
             "line item",
@@ -41,6 +48,8 @@ CHOICE_CUES: dict[str, dict[str, list[str]]] = {
             "statement",
         ],
         "payment_arrangement": [
+            "pagar",
+            "fecha de pago",
             "more time to pay",
             "get paid",
             "move my due",
@@ -64,6 +73,8 @@ CHOICE_CUES: dict[str, dict[str, list[str]]] = {
             "unlimited",
         ],
         "device_tech_support": [
+            "pantalla",
+            "se apaga",
             "drains",
             "update",
             "camera",
@@ -77,6 +88,9 @@ CHOICE_CUES: dict[str, dict[str, list[str]]] = {
             "wifi calling",
         ],
         "network_coverage": [
+            "señal",
+            "llamadas se cortan",
+            "internet del teléfono",
             "one bar",
             "towers",
             "commute",
@@ -112,6 +126,7 @@ CHOICE_CUES: dict[str, dict[str, list[str]]] = {
             "hasn't arrived",
         ],
         "international_roaming": [
+            "viajar",
             "overseas",
             "traveling to",
             "going on a trip",
@@ -123,6 +138,8 @@ CHOICE_CUES: dict[str, dict[str, list[str]]] = {
             "travelpass",
         ],
         "cancel_service": [
+            "cancelar",
+            "cerrar mi cuenta",
             "another carrier",
             "to leave",
             "cancel",
@@ -178,7 +195,40 @@ NOUL_CUES: dict[str, tuple[list[str], list[str]]] = {
         [],
     ),
     "in_scope": (
-        ["phone", "bill", "plan", "line", "sim", "order", "signal", "service", "account", "device", "data", "charge"],
+        [
+            "phone",
+            "bill",
+            "plan",
+            "line",
+            "sim",
+            "order",
+            "signal",
+            "service",
+            "account",
+            "device",
+            "data",
+            "charge",
+            "pay",
+            "due",
+            "cancel",
+            "travel",
+            "abroad",
+            "upgrade",
+            "activat",
+            "fee",
+            "coverage",
+            "calls",
+            "internet",
+            "hotspot",
+            "trade",
+            "verizon",
+            "factura",
+            "señal",
+            "teléfono",
+            "cuenta",
+            "servicio",
+            "pagar",
+        ],
         ["weather", "recipe", "football", "poem"],
     ),
     "churn_language": (["cancel", "switch to", "leaving", "t-mobile", "at&t", "done with", "close my account"], []),
@@ -435,7 +485,12 @@ class MockJev:
         self._calls = 0
 
     def ask(
-        self, state: Any, questions: dict[str, dict[str, Any]], model: str | None = None, timeout_s: float = 5.0
+        self,
+        state: Any,
+        questions: dict[str, dict[str, Any]],
+        model: str | None = None,
+        timeout_s: float = 5.0,
+        request_id: str | None = None,
     ) -> JevResponse:
         body = build_request(state, questions, model or self.model)
         seed = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()

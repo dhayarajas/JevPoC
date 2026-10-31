@@ -1,7 +1,7 @@
 use_case: fraud.sim_change
 version: 1
 owner: fraud-identity
-status: published
+status: retired   # kept for audit; superseded by v2
 model: jev-1.14.0
 timeout_ms: 500
 state_budget_tokens: 600

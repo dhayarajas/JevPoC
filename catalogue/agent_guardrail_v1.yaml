@@ -1,7 +1,7 @@
 use_case: platform.agent_guardrail
 version: 1
 owner: ai-platform
-status: published
+status: retired   # kept for audit; superseded by v2
 model: jev-1.14.0
 timeout_ms: 300
 state_budget_tokens: 1500

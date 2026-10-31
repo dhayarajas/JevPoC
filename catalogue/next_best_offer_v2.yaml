@@ -1,0 +1,39 @@
+use_case: sales.next_best_offer
+version: 2
+owner: consumer-marketing
+status: published
+model: jev-1.14.0
+timeout_ms: 500
+state_budget_tokens: 1000
+fallback: no_offer
+state_spec: segment, stated_need (masked), usage (fairness fields removed), eligible_offers (max 8)
+approvals:              # POC placeholders; real sign-off happens in the PR (CODEOWNERS)
+  - {role: owner, by: consumer-marketing, on: 2026-10-31}
+  - {role: privacy, by: privacy-review, on: 2026-10-31}
+eval:
+  dataset: data/eval (synthetic, frozen)
+  status: mock_only     # re-run make l8 with a TypeSafe key before any pilot
+questions:
+  best_offer:
+    type: choice
+    instructions: Which offer in the list best fits the need the customer states in `stated_need`?
+    criteria: {}      # filled per call from eligible offers (Jev ranks, pricing engine prices)
+  open_to_offer:
+    type: noul
+    instructions: The customer is open to hearing about a new offer right now.
+    criteria:
+      "true": The customer asks about options, deals or a better fit
+      "false": The customer wants only the current problem fixed or declines offers
+  save_risk:
+    type: score
+    instructions: How likely is the customer to leave Verizon?
+    criteria:
+      - Happy, no sign of leaving
+      - Mild price or service complaint
+      - Mentions a competitor or says the bill is too high
+      - Says they are cancelling or switching
+thresholds:
+  open_min: 0.4
+  save_desk: 2.0
+  offer_confidence: 0.35
+  max_offers_30d: 2       # contact cap per customer

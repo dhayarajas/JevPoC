@@ -105,6 +105,27 @@ FILL = {
 }
 
 QUEUES_PREFIX = "route:"
+N = 2000  # deck slide 46: at least 2k labelled cases per use case
+DAYS = 90
+TRAIN_DAYS = 60  # temporal split: train period vs post-launch
+
+ES_TEMPLATES = {
+    "billing_question": ["¿Por qué mi factura subió {amt} este mes?", "Tengo un cargo en mi factura que no entiendo"],
+    "network_coverage": ["No tengo señal en {city}, las llamadas se cortan", "El internet del teléfono está muy lento"],
+    "device_tech_support": ["Mi teléfono no funciona, la pantalla está negra", "Mi teléfono se apaga solo"],
+    "payment_arrangement": ["No puedo pagar todo este mes, ¿puedo pagar después?", "Quiero cambiar la fecha de pago"],
+    "cancel_service": ["Quiero cancelar mi servicio por favor", "Voy a cerrar mi cuenta"],
+    "international_roaming": ["Voy a viajar a {country}, ¿cómo uso mi teléfono allá?"],
+}
+
+
+def _meta(i: int, n: int, rng: random.Random, gold) -> dict:
+    """Split, temporal period, and a 5% blind second label from a simulated second labeller."""
+    day = i * DAYS // n
+    m = {"split": "dev" if i % 2 == 0 else "test", "day": day, "period": "train" if day < TRAIN_DAYS else "post_launch"}
+    if i % 20 == 7:
+        m["relabel"] = gold if rng.random() > 0.03 else "disagree"
+    return m
 
 
 def _fill(t: str, rng: random.Random) -> str:
@@ -117,7 +138,7 @@ def _fill(t: str, rng: random.Random) -> str:
     return t
 
 
-def care_intent(n: int = 480, seed: int = 7) -> list[dict]:
+def care_intent(n: int = N, seed: int = 7) -> list[dict]:
     from jevpoc.usecases.care_intent import QUEUES
 
     rng = random.Random(seed)
@@ -125,9 +146,15 @@ def care_intent(n: int = 480, seed: int = 7) -> list[dict]:
     intents = list(INTENT_TEMPLATES)
     for i in range(n):
         r = rng.random()
-        if r < 0.06:
+        lang = "en"
+        if r < 0.10:
+            lang = "es"
+            intent = rng.choice(list(ES_TEMPLATES))
+            msg = _fill(rng.choice(ES_TEMPLATES[intent]), rng)
+            gold = QUEUES_PREFIX + QUEUES[intent] + "_es"
+        elif r < 0.16:
             msg, intent, gold = rng.choice(HUMAN), None, "agent"
-        elif r < 0.10:
+        elif r < 0.20:
             msg, intent, gold = rng.choice(OUT_OF_SCOPE), None, "out_of_scope"
         else:
             intent = intents[i % len(intents)]
@@ -136,7 +163,8 @@ def care_intent(n: int = 480, seed: int = 7) -> list[dict]:
         rows.append(
             {
                 "id": f"ci-{i:04d}",
-                "split": "dev" if i % 2 == 0 else "test",
+                **_meta(i, n, rng, gold),
+                "lang": lang,
                 "context": {
                     "latest_message": msg,
                     "account": {
@@ -152,7 +180,7 @@ def care_intent(n: int = 480, seed: int = 7) -> list[dict]:
     return rows
 
 
-def sim_change(n: int = 600, seed: int = 11, fraud_rate: float = 0.12) -> list[dict]:
+def sim_change(n: int = N, seed: int = 11, fraud_rate: float = 0.12) -> list[dict]:
     """Latent label first, then features drawn from overlapping label-conditional distributions."""
     rng = random.Random(seed)
     rows = []
@@ -197,15 +225,99 @@ def sim_change(n: int = 600, seed: int = 11, fraud_rate: float = 0.12) -> list[d
             ),
             "fraud_flag": fraud and rng.random() < 0.05,
         }
+        rows.append({"id": f"sc-{i:04d}", **_meta(i, n, rng, fraud), "context": ctx, "gold_fraud": fraud})
+    return rows
+
+
+ESC_CALM = [
+    "How do I check my data usage?",
+    "Thanks, that helped.",
+    "Can you tell me my due date?",
+    "Ok, I will try that now.",
+    "This is a bit annoying but fine, what next?",
+]
+ESC_POOLS = {
+    "frustrated": [
+        "This is the third time this month, it's ridiculous, nobody fixes it.",
+        "Unacceptable. I have been waiting for an hour and this is useless.",
+        "Still broken. I am so fed up with this.",
+    ],
+    "churn": [
+        "I'm going to cancel and switch to T-Mobile.",
+        "I'm done with Verizon, close my account.",
+        "AT&T is cheaper, I'm leaving.",
+    ],
+    "human": ["Let me talk to a real person.", "Get me an agent now.", "I want a supervisor."],
+}
+
+
+def escalation(n: int = N, seed: int = 13) -> list[dict]:
+    """Gold says whether the conversation should leave the bot (handoff or alert)."""
+    rng = random.Random(seed)
+    classes = ["calm", "calm", "frustrated", "churn", "human"]
+    rows = []
+    for i in range(n):
+        cls = classes[i % len(classes)]
+        turns = []
+        for _ in range(rng.randint(1, 3)):
+            turns.append({"role": "customer", "text": rng.choice(ESC_CALM)})
+            turns.append(
+                {
+                    "role": "bot",
+                    "text": rng.choice(["Let me check that.", "Try restarting the device.", "Here is the link."]),
+                }
+            )
+        last = rng.choice(ESC_CALM if cls == "calm" else ESC_POOLS[cls])
+        turns.append({"role": "customer", "text": last})
+        gold = cls != "calm"
+        ctx = {"turns": turns, "tenure_months": rng.randint(1, 150), "hold_count": rng.randint(0, 3)}
         rows.append(
-            {"id": f"sc-{i:04d}", "split": "dev" if i % 2 == 0 else "test", "context": ctx, "gold_fraud": fraud}
+            {"id": f"es-{i:04d}", **_meta(i, n, rng, gold), "context": ctx, "class": cls, "gold_escalate": gold}
         )
     return rows
 
 
+def answer_verify(n: int = N, seed: int = 17) -> list[dict]:
+    """Gold says whether the LLM draft is safe to send unchanged."""
+    from jevpoc.usecases.answer_verify import EXAMPLES, FACTS
+
+    rng = random.Random(seed)
+    q_plan = EXAMPLES[0]["customer_question"]
+    pools = {
+        "good": [
+            (q_plan, EXAMPLES[0]["draft_reply"]),
+            (q_plan, f"Your plan is {FACTS['plan']} at {FACTS['monthly_price']}."),
+            ("What plan am I on?", f"You are on {FACTS['plan']}."),
+        ],
+        "wrong_facts": [
+            (q_plan, EXAMPLES[1]["draft_reply"]),
+            (q_plan, "Unlimited Plus is $70 per line and includes 25 GB of premium hotspot."),
+            ("What plan am I on?", "You are on Unlimited Welcome."),
+        ],
+        "price_promise": [
+            (EXAMPLES[2]["customer_question"], EXAMPLES[2]["draft_reply"]),
+            ("Why is there a late fee?", "No worries, I will waive the $10 late fee for you."),
+            ("Can I get a discount?", "I can give you $20 off next month as a courtesy."),
+        ],
+    }
+    classes = ["good", "good", "wrong_facts", "price_promise"]
+    rows = []
+    for i in range(n):
+        cls = classes[i % len(classes)]
+        q, draft = rng.choice(pools[cls])
+        gold = cls == "good"
+        ctx = {"customer_question": q, "draft_reply": draft, "facts": FACTS}
+        rows.append({"id": f"av-{i:04d}", **_meta(i, n, rng, gold), "context": ctx, "class": cls, "gold_send": gold})
+    return rows
+
+
+SETS = {"care_intent": care_intent, "sim_change": sim_change, "escalation": escalation, "answer_verify": answer_verify}
+
+
 def write() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    for name, rows in (("care_intent", care_intent()), ("sim_change", sim_change())):
+    for name, fn in SETS.items():
+        rows = fn()
         with open(OUT / f"{name}.jsonl", "w") as f:
             for r in rows:
                 f.write(json.dumps(r) + "\n")

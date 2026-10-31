@@ -81,11 +81,13 @@ class HttpJev:
         questions: dict[str, dict[str, Any]],
         model: str | None = None,
         timeout_s: float = 5.0,
+        request_id: str | None = None,
     ) -> JevResponse:
         body = build_request(state, questions, model or self.model)
+        headers = {"X-Request-Id": request_id} if request_id else None
         t0 = time.perf_counter()
         try:
-            r = self._http.post(self.url, json=body, timeout=timeout_s)
+            r = self._http.post(self.url, json=body, timeout=timeout_s, headers=headers)
         except httpx.TimeoutException as e:
             raise JevTimeout(f"timeout after {timeout_s * 1000:.0f} ms") from e
         except httpx.HTTPError as e:

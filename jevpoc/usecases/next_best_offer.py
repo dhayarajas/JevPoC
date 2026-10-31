@@ -48,7 +48,8 @@ def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:
     return mask(
         {
             "stated_need": ctx["stated_need"],
-            "usage": ctx.get("usage", {}),
+            "usage": {k: v for k, v in ctx.get("usage", {}).items() if k not in FAIRNESS_EXCLUDED},
+            "eligible_offers": eligible(ctx)[:8],
             "plan": ctx.get("plan"),
             "recent_turns": ctx.get("recent_turns", [])[-4:],
         },
@@ -63,9 +64,16 @@ def questions(entry, ctx):
     return q
 
 
+# Never sent to Jev and never used to choose an offer.
+FAIRNESS_EXCLUDED = {"age", "gender", "ethnicity", "zip", "credit_score", "disability"}
+MAX_OFFERS_30D = 2
+
+
 def hard_rules(ctx):
     if ctx.get("marketing_opt_out"):
         return "no_offer", "marketing_opt_out"
+    if ctx.get("offers_presented_30d", 0) >= MAX_OFFERS_30D:
+        return "no_offer", "contact_cap_reached"
     if not eligible(ctx):
         return "no_offer", "nothing_eligible"
     return None
@@ -84,8 +92,7 @@ def policy(resp, ctx, th):
     if details["open_to_offer"] < th["open_min"]:
         return "no_offer", "not_receptive", details
     if details["confidence"] < th["offer_confidence"]:
-        best = SEGMENT_DEFAULT[ctx.get("segment", "consumer")]
-        details["best_offer"] = best
+        return "no_offer", "unsure_which_offer", details
     details["price"] = OFFERS[best]["price"]  # price comes from the pricing table, never from Jev
     return f"offer:{best}", "fit_to_need", details
 

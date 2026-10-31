@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from jevpoc.masking import mask
-from jevpoc.usecases.base import band
+from jevpoc.usecases.base import band, looks_like_instruction
 
 NAME = "fraud.sim_change"
 
@@ -37,6 +37,8 @@ def hard_rules(ctx: dict[str, Any]):
         return "hold", "account_fraud_flag"
     if ctx["auth_method"] == "none":
         return "hold", "no_authentication"
+    if looks_like_instruction(ctx.get("interaction_notes", "")):
+        return "hold", "instruction_like_text_in_notes"
     return None
 
 
@@ -52,8 +54,18 @@ def policy(resp, ctx, th):
         "ato_risk": round(ato, 2),
         "pressure": round(resp.noul("pressure_tactics"), 3),
     }
-    if p >= th["hold"] or ato >= th["ato_hold"]:
-        return "hold", "high_takeover_risk", details
+    rec = resp.choice("recommended_action") if "recommended_action" in resp.answers else None
+    details["recommended_action"] = rec
+    raised = rec is not None and resp.confidence("recommended_action") >= th["action_confidence"]
+    if p >= th["hold"] or ato >= th["ato_hold"] or (raised and rec in ("hold", "analyst")):
+        details["notify"] = "fraud_analyst"
+        return (
+            "hold",
+            "high_takeover_risk" if p >= th["hold"] or ato >= th["ato_hold"] else f"jev_recommends_{rec}",
+            details,
+        )
+    if raised and rec == "step_up":
+        return "step_up", "jev_recommends_step_up", details
     if p >= th["step_up"]:
         return "step_up", "medium_takeover_risk", details
     return "allow", "low_takeover_risk", details

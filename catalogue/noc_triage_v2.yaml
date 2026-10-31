@@ -1,0 +1,48 @@
+use_case: noc.triage
+version: 2
+owner: noc-operations
+status: published
+model: jev-1.14.0
+timeout_ms: 1000
+state_budget_tokens: 2000
+fallback: manual_triage
+state_spec: alarms (deduplicated, site ids hashed), kpi bands, recent_changes, topology summary
+approvals:              # POC placeholders; real sign-off happens in the PR (CODEOWNERS)
+  - {role: owner, by: noc-operations, on: 2026-10-31}
+  - {role: privacy, by: privacy-review, on: 2026-10-31}
+eval:
+  dataset: data/eval (synthetic, frozen)
+  status: mock_only     # re-run make l8 with a TypeSafe key before any pilot
+questions:
+  severity:
+    type: score
+    instructions: How severe is the service impact described in `alarms` and `kpi_bands`?
+    criteria:
+      - Informational, no service impact
+      - Minor, a single element degraded with redundancy in place
+      - Moderate, noticeable degradation at one site
+      - Major, outage at one site or degradation across several sites
+      - Critical, multi-site outage or impact to emergency or priority services
+  fault_domain:
+    type: choice
+    instructions: Which part of the network most likely caused `alarms`?
+    criteria:
+      ran: Radio access, such as a cell, sector, radio unit or antenna
+      transport: Backhaul or fibre or microwave links and routers between sites
+      core: Core network functions such as AMF, SMF, UPF, MME or HSS
+      power: Site power, batteries, rectifiers or generators
+      customer_premises: Equipment at a single customer location such as a router or ONT
+  truck_roll:
+    type: noul
+    instructions: Fixing `alarms` needs a technician on site.
+    criteria:
+      "true": A physical fault such as power loss, hardware failure, fibre cut or damaged antenna
+      "false": A software, configuration or remote-reset fault
+  change_related:
+    type: noul
+    instructions: "`alarms` started during or right after an entry in `recent_changes`."
+thresholds:
+  page_severity: 4.0
+  page_confidence: 0.8
+  domain_confidence: 0.5
+  truck_roll: 0.7

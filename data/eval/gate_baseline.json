@@ -1,0 +1,32 @@
+{
+  "mock:jev-1.14.0": {
+    "answer_verify": {
+      "accuracy": 0.672,
+      "automated": 0.172,
+      "ece": 0.2676,
+      "false_action_rate": 0.0,
+      "macro_f1": 0.756
+    },
+    "care_intent": {
+      "accuracy": 0.539,
+      "automated": 0.509,
+      "ece": 0.2397,
+      "false_action_rate": 0.3674,
+      "macro_f1": 0.5828
+    },
+    "escalation": {
+      "accuracy": 0.795,
+      "automated": 0.603,
+      "ece": 0.1359,
+      "false_action_rate": 0.3383,
+      "macro_f1": 0.897
+    },
+    "sim_change": {
+      "accuracy": 0.565,
+      "automated": 0.465,
+      "ece": 0.1884,
+      "false_action_rate": 0.0215,
+      "macro_f1": 0.8191
+    }
+  }
+}

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +14,11 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 CATALOGUE_DIR = ROOT / "catalogue"
+LOCK_FILE = "LOCK.json"
+
+
+class CatalogueError(RuntimeError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -26,10 +34,21 @@ class Entry:
     thresholds: dict[str, float]
     fallback: str
     path: str
+    state_spec: str = ""
+    approvals: tuple = ()
+    eval: dict | None = None
 
     @property
     def key(self) -> str:
         return f"{self.use_case}@v{self.version}"
+
+    @property
+    def question_versions(self) -> dict[str, str]:
+        """Content hash of each question, logged with every decision."""
+        return {
+            qid: f"{self.key}:{qid}:{_digest(json.dumps(q, sort_keys=True))}"
+            for qid, q in self.question_payload().items()
+        }
 
     def question_payload(self) -> dict[str, dict[str, Any]]:
         """Questions as sent to Jev: only type, instructions, criteria."""
@@ -39,10 +58,36 @@ class Entry:
         return out
 
 
-def load(directory: Path = CATALOGUE_DIR) -> dict[str, Entry]:
-    entries: dict[str, Entry] = {}
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:10]
+
+
+def _read_lock(directory: Path) -> dict[str, str]:
+    f = directory / LOCK_FILE
+    return json.loads(f.read_text()) if f.exists() else {}
+
+
+def lock(directory: Path = CATALOGUE_DIR) -> dict[str, str]:
+    """Record the hash of every published or retired file. Locked files may never change."""
+    locked = _read_lock(directory)
     for p in sorted(directory.glob("*.yaml")):
         d = yaml.safe_load(p.read_text())
+        if d["status"] in ("published", "retired"):
+            locked.setdefault(p.name, _digest(p.read_text()))
+    (directory / LOCK_FILE).write_text(json.dumps(locked, indent=2, sort_keys=True) + "\n")
+    return locked
+
+
+def load(directory: Path = CATALOGUE_DIR) -> dict[str, Entry]:
+    entries: dict[str, Entry] = {}
+    locked = _read_lock(directory)
+    for p in sorted(directory.glob("*.yaml")):
+        text = p.read_text()
+        if p.name in locked and locked[p.name] != _digest(text):
+            raise CatalogueError(f"{p.name} changed after it was locked; publish a new version instead")
+        d = yaml.safe_load(text)
+        if d["status"] == "published" and not d.get("approvals"):
+            raise CatalogueError(f"{p.name} is published without approvals")
         e = Entry(
             use_case=d["use_case"],
             version=int(d["version"]),
@@ -54,7 +99,10 @@ def load(directory: Path = CATALOGUE_DIR) -> dict[str, Entry]:
             questions=d["questions"],
             thresholds=d.get("thresholds", {}),
             fallback=d.get("fallback", "rules"),
-            path=str(p.relative_to(ROOT)),
+            path=str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p),
+            state_spec=d.get("state_spec", ""),
+            approvals=tuple(d.get("approvals") or ()),
+            eval=d.get("eval"),
         )
         prev = entries.get(e.use_case)
         if e.status == "published" and (prev is None or prev.status != "published" or e.version > prev.version):
@@ -62,3 +110,11 @@ def load(directory: Path = CATALOGUE_DIR) -> dict[str, Entry]:
         elif prev is None:
             entries[e.use_case] = e
     return entries
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["lock"]:
+        print(json.dumps(lock(), indent=2))
+    else:
+        for e in load().values():
+            print(f"{e.key:34s} {e.status:10s} {e.model}  {e.path}")

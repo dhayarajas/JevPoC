@@ -8,6 +8,7 @@ and the decision log.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import sqlite3
 import threading
@@ -22,6 +23,7 @@ from jevpoc.client import JevError, JevResponse, JevTimeout, get_client
 from jevpoc.masking import contains_pii
 
 DB_PATH = catalogue.ROOT / "reports" / "decision_log.sqlite"
+RETENTION_DAYS = 395  # about 13 months (deck slide 47)
 
 
 @dataclass
@@ -37,6 +39,8 @@ class Decision:
     fallback_used: bool
     state_hash: str
     state_tokens: int
+    question_versions: dict[str, str] = field(default_factory=dict)
+    policy_version: str = ""
     answers: dict[str, Any] = field(default_factory=dict)
     details: dict[str, Any] = field(default_factory=dict)
     state: Any = None
@@ -101,6 +105,8 @@ class DecisionLog:
         "caller",
         "human_override",
         "label",
+        "question_versions",
+        "policy_version",
     )
 
     def __init__(self, path: Path | str = DB_PATH):
@@ -114,8 +120,19 @@ class DecisionLog:
                 action text, reason_code text, latency_ms real, fallback_used int, caller text,
                 human_override text, label text)"""
         )
+        cols = {r[1] for r in self.db.execute("pragma table_info(decision_log)")}
+        for c in ("question_versions", "policy_version"):
+            if c not in cols:
+                self.db.execute(f"alter table decision_log add column {c} text")
         self.db.execute("create index if not exists ix_uc_ts on decision_log(use_case, ts)")
         self.db.commit()
+        self.purge()
+
+    def purge(self, days: int = RETENTION_DAYS) -> int:
+        with self._lock:
+            n = self.db.execute("delete from decision_log where ts < ?", (time.time() - days * 86400,)).rowcount
+            self.db.commit()
+        return n
 
     def write(self, d: Decision, caller: str) -> None:
         row = (
@@ -135,6 +152,8 @@ class DecisionLog:
             caller,
             None,
             None,
+            json.dumps(d.question_versions),
+            d.policy_version,
         )
         with self._lock:
             self.db.execute(f"insert into decision_log values ({','.join('?' * len(row))})", row)
@@ -170,6 +189,11 @@ class DecisionLog:
 
 def state_hash(state: Any) -> str:
     return hashlib.sha256(json.dumps(state, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def policy_version(module) -> str:
+    src = inspect.getsource(module)
+    return f"{module.NAME}:{hashlib.sha256(src.encode()).hexdigest()[:10]}"
 
 
 def estimate_tokens(obj: Any) -> int:
@@ -210,6 +234,8 @@ class Gateway:
             state_hash=state_hash(state),
             state_tokens=tokens,
             state=state,
+            question_versions=entry.question_versions,
+            policy_version=policy_version(uc),
         )
 
         hard = uc.hard_rules(ctx) if hasattr(uc, "hard_rules") else None
@@ -235,7 +261,11 @@ class Gateway:
         else:
             try:
                 resp = self.client.ask(
-                    state, uc.questions(entry, ctx), entry.model, timeout_s=(timeout_ms or entry.timeout_ms) / 1000
+                    state,
+                    uc.questions(entry, ctx),
+                    entry.model,
+                    timeout_s=(timeout_ms or entry.timeout_ms) / 1000,
+                    request_id=decision_id,
                 )
                 br.record(True)
             except JevTimeout:

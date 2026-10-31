@@ -1,0 +1,43 @@
+use_case: care.answer_verify
+version: 2
+owner: digital-assistant
+status: published
+model: jev-1.14.0
+timeout_ms: 400
+state_budget_tokens: 4000
+fallback: hold_for_agent
+state_spec: customer_question, retrieved_facts, draft_answer (masked)
+approvals:              # POC placeholders; real sign-off happens in the PR (CODEOWNERS)
+  - {role: owner, by: digital-assistant, on: 2026-10-31}
+  - {role: privacy, by: privacy-review, on: 2026-10-31}
+eval:
+  dataset: data/eval (synthetic, frozen)
+  status: mock_only     # re-run make l8 with a TypeSafe key before any pilot
+questions:
+  consistent_with_facts:
+    type: noul
+    instructions: Every price, plan feature, date and policy stated in `draft_reply` appears in `facts`.
+    criteria:
+      "true": All factual claims in the draft match `facts`
+      "false": At least one price, plan feature, date or policy in the draft differs from `facts` or is not in `facts`
+  price_promise:
+    type: noul
+    instructions: "`draft_reply` promises the customer a credit, refund, waiver or discount."
+    criteria:
+      "true": The draft says the customer will receive a credit, refund, waived fee or discount
+      "false": The draft explains a price or policy without promising money back
+  answers_question:
+    type: noul
+    instructions: "`draft_reply` answers `customer_question`."
+  failure_type:
+    type: choice
+    instructions: If the draft states something that is not in `facts`, what kind of claim is it?
+    criteria:
+      wrong_price: A monthly price or fee that differs from `facts`
+      wrong_plan_details: A data allowance, hotspot or feature that differs from `facts`
+      wrong_policy: A return window, fee rule or eligibility rule that differs from `facts`
+      invented_credit: A credit, refund or discount that `facts` do not offer
+thresholds:
+  consistent_min: 0.9
+  answers_min: 0.6
+  promise_block: 0.1

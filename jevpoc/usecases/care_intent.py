@@ -21,6 +21,35 @@ QUEUES = {
     "cancel_service": "retention",
     "fraud_unrecognised": "fraud",
     "device_upgrade": "sales_care",
+    "autopay_setup": "billing",
+    "bill_dispute": "billing",
+    "refund_request": "billing",
+    "late_fee": "billing_collections",
+    "prepaid_refill": "prepaid",
+    "add_line": "sales_care",
+    "remove_line": "sales_care",
+    "number_transfer_in": "activations",
+    "port_out_pin": "retention",
+    "account_access": "account_security",
+    "ownership_transfer": "account_services",
+    "address_change": "account_services",
+    "hotspot_issue": "device_support",
+    "voicemail_setup": "device_support",
+    "wifi_calling": "device_support",
+    "home_internet_setup": "home_support",
+    "home_internet_outage": "home_support",
+    "tv_service": "home_support",
+    "streaming_perks": "sales_care",
+    "trade_in_status": "orders",
+    "device_return": "orders",
+    "insurance_claim": "device_protection",
+    "device_unlock": "device_support",
+    "lost_stolen_device": "fraud",
+    "repair_appointment": "device_support",
+    "store_appointment": "retail",
+    "accessibility_services": "accessibility",
+    "discount_program": "sales_care",
+    "privacy_request": "privacy_office",
 }
 
 # Today's IVR-style keyword router: first match wins. Used as fallback and as the L8 baseline arm.
@@ -73,13 +102,19 @@ def questions(entry, ctx):
 def policy(resp, ctx, th):
     intent = resp.choice("intent")
     conf = resp.confidence("intent")
-    details = {"intent": intent, "confidence": round(conf, 3), "queue": QUEUES[intent]}
+    lang = "en"
+    if "language" in resp.answers and resp.confidence("language") >= th.get("language_min", 0):
+        lang = resp.choice("language")
+    queue = QUEUES[intent] + ("_es" if lang == "es" else "")
+    details = {"intent": intent, "confidence": round(conf, 3), "queue": queue, "language": lang}
+    if lang == "other":
+        return "agent", "language_not_supported", details
     if resp.noul("needs_human") >= th["needs_human"]:
         return "agent", "customer_asked_for_human", details
     if resp.noul("in_scope") < th["in_scope_min"]:
         return "out_of_scope", "not_an_account_request", details
     if conf >= th["route"]:
-        return f"route:{QUEUES[intent]}", f"intent={intent}", details
+        return f"route:{queue}", f"intent={intent}", details
     if conf >= th["clarify"]:
         a, b = top2(resp, "intent")
         details["clarify_between"] = [a, b]

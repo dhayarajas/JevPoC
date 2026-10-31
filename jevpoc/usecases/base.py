@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from jevpoc.client import JevResponse
 
 Action = tuple[str, str]  # (action, reason_code)
+
+
+INSTRUCTION_LIKE = re.compile(
+    r"(?i)\b(ignore|disregard|forget)\b.{0,30}\b(instructions|rules|prompt)\b|\byou are now\b|\bsystem prompt\b"
+    r"|\b(answer|respond|reply)\s+(allow|send|yes|true)\b"
+)
+
+
+def looks_like_instruction(text: str) -> bool:
+    """Free text that tries to steer the model is treated as a risk signal, never as an instruction."""
+    return bool(INSTRUCTION_LIKE.search(text or ""))
 
 
 def band(value: float, edges: list[float], labels: list[str]) -> str:
