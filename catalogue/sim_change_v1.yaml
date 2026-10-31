@@ -1,0 +1,31 @@
+use_case: fraud.sim_change
+version: 1
+owner: fraud-identity
+status: published
+model: jev-1.14.0
+timeout_ms: 500
+state_budget_tokens: 600
+fallback: existing_rules_and_analyst
+questions:
+  suspicious:
+    type: noul
+    instructions: This SIM change looks like an account takeover attempt rather than the account holder.
+    criteria:
+      "true": The pattern fits a takeover, for example SMS OTP on a new device after recent changes, a location mismatch, or pressure in `interaction_notes`
+      "false": The pattern fits the account holder, for example a store visit with ID, a long-tenured account and no recent changes
+  pressure_tactics:
+    type: noul
+    instructions: "`interaction_notes` show the requester pushing for speed or avoiding verification."
+  ato_risk:
+    type: score
+    instructions: How likely is this request to be an account takeover?
+    criteria:
+      - No takeover signals
+      - One weak signal
+      - Several signals that a fraud analyst would review
+      - Strong signals of a takeover in progress
+      - Clear takeover pattern
+thresholds:
+  hold: 0.8
+  step_up: 0.5
+  ato_hold: 3.0

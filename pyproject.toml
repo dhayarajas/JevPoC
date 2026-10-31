@@ -1,0 +1,17 @@
+[project]
+name = "jevpoc"
+version = "0.1.0"
+description = "Jev (TypeSafe AI) proof of concept on Verizon decision points"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B905"]  # long cue/template strings; zip lengths are equal by construction
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,37 @@
+use_case: care.escalation
+version: 1
+owner: care-ops-quality
+status: published
+model: jev-1.14.0
+timeout_ms: 500
+state_budget_tokens: 1200
+fallback: keyword_rules
+questions:
+  frustration:
+    type: score
+    instructions: How frustrated is the customer in `turns`?
+    criteria:
+      - The customer is calm and cooperative
+      - The customer mentions a minor inconvenience but stays polite
+      - The customer is clearly frustrated, for example repeating the problem or saying it keeps happening
+      - The customer is angry, uses strong language or says they will leave
+  churn_language:
+    type: noul
+    instructions: The customer says they want to cancel or move to another carrier.
+    criteria:
+      "true": The customer mentions cancelling, closing the account, or switching to another carrier
+      "false": The customer only complains about the problem without mentioning leaving
+  asks_for_human:
+    type: noul
+    instructions: The customer asks to speak with a person.
+  bot_resolvable:
+    type: noul
+    instructions: The assistant can resolve the customer's request with self-service steps such as a reset, a link or a status lookup.
+    criteria:
+      "true": A how-to, status or reset request that self-service can complete
+      "false": Needs an account change, a refund, an exception, or has already failed with self-service
+thresholds:
+  frustration_alert: 2.0
+  churn_alert: 0.6
+  human: 0.7
+  resolvable_min: 0.3

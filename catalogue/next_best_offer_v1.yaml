@@ -1,0 +1,31 @@
+use_case: sales.next_best_offer
+version: 1
+owner: consumer-marketing
+status: published
+model: jev-1.14.0
+timeout_ms: 500
+state_budget_tokens: 1000
+fallback: segment_default_offer
+questions:
+  best_offer:
+    type: choice
+    instructions: Which offer in the list best fits the need the customer states in `stated_need`?
+    criteria: {}      # filled per call from eligible offers (Jev ranks, pricing engine prices)
+  open_to_offer:
+    type: noul
+    instructions: The customer is open to hearing about a new offer right now.
+    criteria:
+      "true": The customer asks about options, deals or a better fit
+      "false": The customer wants only the current problem fixed or declines offers
+  save_risk:
+    type: score
+    instructions: How likely is the customer to leave Verizon?
+    criteria:
+      - Happy, no sign of leaving
+      - Mild price or service complaint
+      - Mentions a competitor or says the bill is too high
+      - Says they are cancelling or switching
+thresholds:
+  open_min: 0.4
+  save_desk: 2.0
+  offer_confidence: 0.35
