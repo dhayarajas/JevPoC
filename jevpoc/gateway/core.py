@@ -107,6 +107,7 @@ class DecisionLog:
         "label",
         "question_versions",
         "policy_version",
+        "call_id",
     )
 
     def __init__(self, path: Path | str = DB_PATH):
@@ -121,7 +122,7 @@ class DecisionLog:
                 human_override text, label text)"""
         )
         cols = {r[1] for r in self.db.execute("pragma table_info(decision_log)")}
-        for c in ("question_versions", "policy_version"):
+        for c in ("question_versions", "policy_version", "call_id"):
             if c not in cols:
                 self.db.execute(f"alter table decision_log add column {c} text")
         self.db.execute("create index if not exists ix_uc_ts on decision_log(use_case, ts)")
@@ -134,7 +135,12 @@ class DecisionLog:
             self.db.commit()
         return n
 
-    def write(self, d: Decision, caller: str) -> None:
+    def count_alerts(self, use_case: str, call_id: str, prefix: str) -> int:
+        q = "select count(*) from decision_log where use_case = ? and call_id = ? and action like ?"
+        with self._lock:
+            return self.db.execute(q, (use_case, call_id, prefix + "%")).fetchone()[0]
+
+    def write(self, d: Decision, caller: str, call_id: str | None = None) -> None:
         row = (
             d.decision_id,
             time.time(),
@@ -154,6 +160,7 @@ class DecisionLog:
             None,
             json.dumps(d.question_versions),
             d.policy_version,
+            call_id,
         )
         with self._lock:
             self.db.execute(f"insert into decision_log values ({','.join('?' * len(row))})", row)
@@ -227,6 +234,10 @@ class Gateway:
         if contains_pii(state):
             raise ValueError("state builder leaked an identifier; refusing to send")
         tokens = estimate_tokens(state)
+        questions = uc.questions(entry, ctx)
+        call_id = ctx.get("call_id")
+        if call_id and hasattr(uc, "ALERT_PREFIX"):
+            ctx = {**ctx, "alerts_sent": self.log.count_alerts(use_case, call_id, uc.ALERT_PREFIX)}
         base = dict(
             decision_id=decision_id,
             use_case=use_case,
@@ -234,7 +245,7 @@ class Gateway:
             state_hash=state_hash(state),
             state_tokens=tokens,
             state=state,
-            question_versions=entry.question_versions,
+            question_versions=entry.versions_of(questions),
             policy_version=policy_version(uc),
         )
 
@@ -249,7 +260,7 @@ class Gateway:
                 fallback_used=False,
                 **base,
             )
-            self.log.write(d, caller)
+            self.log.write(d, caller, call_id)
             return d
 
         br = self.breaker(use_case)
@@ -262,7 +273,7 @@ class Gateway:
             try:
                 resp = self.client.ask(
                     state,
-                    uc.questions(entry, ctx),
+                    questions,
                     entry.model,
                     timeout_s=(timeout_ms or entry.timeout_ms) / 1000,
                     request_id=decision_id,
@@ -299,5 +310,7 @@ class Gateway:
                 details={**details, "input_tokens": resp.input_tokens, "cost_usd": resp.cost_usd},
                 **base,
             )
-        self.log.write(d, caller)
+        if call_id and hasattr(uc, "ALERT_PREFIX"):
+            d.details["alerts_sent"] = ctx["alerts_sent"] + d.action.startswith(uc.ALERT_PREFIX)
+        self.log.write(d, caller, call_id)
         return d

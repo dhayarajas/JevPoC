@@ -8,6 +8,8 @@ from jevpoc.masking import mask
 from jevpoc.usecases.base import band, fit_turns
 
 NAME = "care.escalation"
+# The gateway counts these per ctx["call_id"] from the decision log and passes ctx["alerts_sent"].
+ALERT_PREFIX = "alert:"
 
 
 def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:

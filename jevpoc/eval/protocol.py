@@ -44,7 +44,7 @@ def _care(row, resp: JevResponse | None, th, arm: str) -> Outcome:
         a = care_intent.fallback(ctx)[0]
         return Outcome(a, a == gold, a.startswith("route:"))
     a = care_intent.policy(resp, ctx, th)[0]
-    ok = a == gold or (a.startswith("clarify:") and gold.startswith("route:"))
+    ok = a == gold or (a.startswith("clarify:") and row["gold_intent"] in a.removeprefix("clarify:").split("|"))
     return Outcome(a, ok, a.startswith("route:") or a == "out_of_scope", resp.confidence("intent"))
 
 

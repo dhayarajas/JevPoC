@@ -25,6 +25,12 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("SSN4", re.compile(r"(?i)\b(?:ssn|social)[^\d]{0,12}\d{4}\b")),
 ]
 
+SECRET_KEY = re.compile(
+    r"(?i)^(?:[\w-]*[_-])?(?:password|passwd|pwd|secret|api[_-]?key|apikey|token|auth|authorization"
+    r"|credentials?|private[_-]?key|client[_-]?secret)$"
+)
+_MASKED_SECRET = re.compile(r"^<SECRET_[0-9a-f]{6}>$")
+
 DROP_KEYS = {"msisdn", "imsi", "imei", "account_id", "customer_name", "email", "ssn_last4", "pin", "address"}
 
 
@@ -45,7 +51,11 @@ def mask_text(text: str, names: list[str] | None = None) -> str:
 def mask(obj: Any, names: list[str] | None = None) -> Any:
     """Recursively drop identifier keys and mask free text."""
     if isinstance(obj, dict):
-        return {k: mask(v, names) for k, v in obj.items() if k.lower() not in DROP_KEYS}
+        return {
+            k: token("SECRET", str(v)) if SECRET_KEY.match(k) and isinstance(v, (str, int)) else mask(v, names)
+            for k, v in obj.items()
+            if k.lower() not in DROP_KEYS
+        }
     if isinstance(obj, list):
         return [mask(v, names) for v in obj]
     if isinstance(obj, str):
@@ -53,6 +63,20 @@ def mask(obj: Any, names: list[str] | None = None) -> Any:
     return obj
 
 
+def _unmasked_secret_value(obj: Any) -> bool:
+    if isinstance(obj, dict):
+        return any(
+            (SECRET_KEY.match(str(k)) and isinstance(v, (str, int)) and not _MASKED_SECRET.match(str(v)))
+            or _unmasked_secret_value(v)
+            for k, v in obj.items()
+        )
+    if isinstance(obj, list):
+        return any(_unmasked_secret_value(v) for v in obj)
+    return False
+
+
 def contains_pii(obj: Any) -> bool:
+    if _unmasked_secret_value(obj):
+        return True
     s = str(obj)
     return any(p.search(s) for k, p in PATTERNS if k != "SSN4")

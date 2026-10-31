@@ -44,11 +44,12 @@ class Entry:
 
     @property
     def question_versions(self) -> dict[str, str]:
-        """Content hash of each question, logged with every decision."""
-        return {
-            qid: f"{self.key}:{qid}:{_digest(json.dumps(q, sort_keys=True))}"
-            for qid, q in self.question_payload().items()
-        }
+        """Content hash of each catalogue question."""
+        return self.versions_of(self.question_payload())
+
+    def versions_of(self, questions: dict[str, dict[str, Any]]) -> dict[str, str]:
+        """Content hash of each question as sent, logged with every decision."""
+        return {qid: f"{self.key}:{qid}:{_digest(json.dumps(q, sort_keys=True))}" for qid, q in questions.items()}
 
     def question_payload(self) -> dict[str, dict[str, Any]]:
         """Questions as sent to Jev: only type, instructions, criteria."""

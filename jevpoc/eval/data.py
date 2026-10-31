@@ -122,7 +122,9 @@ ES_TEMPLATES = {
 def _meta(i: int, n: int, rng: random.Random, gold) -> dict:
     """Split, temporal period, and a 5% blind second label from a simulated second labeller."""
     day = i * DAYS // n
-    m = {"split": "dev" if i % 2 == 0 else "test", "day": day, "period": "train" if day < TRAIN_DAYS else "post_launch"}
+    period = "train" if day < TRAIN_DAYS else "post_launch"
+    # dev (threshold choice) only sees the train period; every post-launch case is held out in test
+    m = {"split": "dev" if period == "train" and i % 2 == 0 else "test", "day": day, "period": period}
     if i % 20 == 7:
         m["relabel"] = gold if rng.random() > 0.03 else "disagree"
     return m
