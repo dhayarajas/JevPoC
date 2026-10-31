@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jev decision gateway POC</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --red:#ee0000; --ink:#111; --muted:#6b6b6b; --line:#e2e2e2; --bg:#f6f6f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:#000; color:#fff; padding:14px 24px; display:flex; align-items:center; gap:16px; }
+  header b { color:var(--red); }
+  header .pill { margin-left:auto; font-size:12px; padding:3px 10px; border-radius:12px; background:#333; }
+  header .pill.mock { background:#8a6d00; }
+  main { display:grid; grid-template-columns: 420px 1fr; gap:16px; padding:16px 24px; }
+  section { background:#fff; border:1px solid var(--line); border-radius:6px; padding:14px 16px; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  select, textarea, input { width:100%; font:inherit; padding:6px 8px; border:1px solid #ccc; border-radius:4px; }
+  textarea { height:300px; font:12px/1.4 ui-monospace, Menlo, monospace; }
+  button { background:var(--red); color:#fff; border:0; padding:8px 16px; border-radius:4px; font-weight:600; cursor:pointer; margin-top:10px; }
+  button.secondary { background:#333; }
+  .action { font-size:22px; font-weight:700; margin:4px 0; }
+  .fallback { color:#8a6d00; }
+  .kv { display:grid; grid-template-columns: 150px 1fr; gap:3px 10px; font-size:13px; }
+  .kv div:nth-child(odd) { color:var(--muted); }
+  pre { background:#fafafa; border:1px solid var(--line); padding:8px; font-size:12px; max-height:260px; overflow:auto; white-space:pre-wrap; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; }
+  .breakers span { display:inline-block; margin:2px 6px 2px 0; padding:2px 8px; border-radius:10px; font-size:11px; background:#e7f5e7; }
+  .breakers span.open { background:#fde2e2; }
+  .breakers span.half_open { background:#fff2cc; }
+  .full { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<header>
+  <div><b>Jev</b> decision gateway &middot; Verizon POC</div>
+  <div class="pill" id="backend">backend: ?</div>
+</header>
+<main>
+  <section>
+    <h2>Ask the gateway</h2>
+    <label for="uc">Use case</label>
+    <select id="uc"></select>
+    <label for="ex">Example</label>
+    <select id="ex"></select>
+    <label for="ctx">Context sent by the channel (raw, before masking)</label>
+    <textarea id="ctx" spellcheck="false"></textarea>
+    <div class="row">
+      <div><label for="timeout">Timeout override (ms, blank = catalogue)</label><input id="timeout" type="number" min="1"></div>
+    </div>
+    <button id="go">Decide</button>
+  </section>
+
+  <section>
+    <h2>Decision</h2>
+    <div id="result"><span style="color:var(--muted)">No decision yet.</span></div>
+  </section>
+
+  <section>
+    <h2>Fault injection (mock only)</h2>
+    <div class="row">
+      <div><label for="fail">Error rate</label><input id="fail" type="number" min="0" max="1" step="0.1" value="0"></div>
+      <div><label for="slow">Slow-response rate</label><input id="slow" type="number" min="0" max="1" step="0.1" value="0"></div>
+    </div>
+    <button class="secondary" id="chaos">Apply</button>
+    <label>Circuit breakers</label>
+    <div class="breakers" id="breakers"></div>
+  </section>
+
+  <section>
+    <h2>Decision log (latest 15)</h2>
+    <table><thead><tr><th>time</th><th>use case</th><th>action</th><th>reason</th><th>backend</th><th>ms</th><th>state hash</th></tr></thead>
+    <tbody id="log"></tbody></table>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let examples = {};
+
+async function j(url, opts) {
+  const r = await fetch(url, opts);
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.detail || r.statusText);
+  return body;
+}
+
+function fillExamples() {
+  const list = examples[$("uc").value] || [];
+  $("ex").innerHTML = list.map((e, i) => `<option value="${i}">${i + 1}. ${label(e)}</option>`).join("");
+  showExample();
+}
+function label(e) {
+  const s = e.latest_message || e.draft_reply || e.stated_need || e.incident_id ||
+            (e.proposed_action && e.proposed_action.tool) || (e.event_type && `${e.event_type} via ${e.channel}`) ||
+            (e.turns && `${e.turns.length} turns`) || "example";
+  return String(s).slice(0, 60);
+}
+function showExample() {
+  const e = (examples[$("uc").value] || [])[+$("ex").value || 0] || {};
+  $("ctx").value = JSON.stringify(e, null, 2);
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function decide() {
+  let ctx;
+  try { ctx = JSON.parse($("ctx").value); } catch (e) { $("result").innerHTML = `<b>Invalid JSON:</b> ${esc(e.message)}`; return; }
+  const body = { context: ctx, caller: "dashboard" };
+  if ($("timeout").value) body.timeout_ms = +$("timeout").value;
+  try {
+    const d = await j(`/v1/decide/${$("uc").value}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) });
+    $("result").innerHTML = `
+      <div class="action ${d.fallback_used ? "fallback" : ""}">${esc(d.action)}</div>
+      <div class="kv">
+        <div>reason</div><div>${esc(d.reason_code)}</div>
+        <div>backend / model</div><div>${esc(d.backend)} / ${esc(d.model)}</div>
+        <div>latency</div><div>${d.latency_ms} ms</div>
+        <div>fallback used</div><div>${d.fallback_used}</div>
+        <div>catalogue version</div><div>${esc(d.use_case)}@v${d.catalogue_version}</div>
+        <div>state tokens</div><div>${d.state_tokens}</div>
+        <div>state hash</div><div><code>${d.state_hash.slice(0, 16)}</code></div>
+      </div>
+      <label>Policy inputs (from Jev answers)</label><pre>${esc(JSON.stringify(d.details, null, 2))}</pre>
+      <label>Masked state actually sent</label><pre>${esc(JSON.stringify(d.state, null, 2))}</pre>`;
+  } catch (e) {
+    $("result").innerHTML = `<b>Error:</b> ${esc(e.message)}`;
+  }
+  refresh();
+}
+
+async function refresh() {
+  const h = await j("/v1/health");
+  $("backend").textContent = `backend: ${h.backend} · ${h.model}`;
+  $("backend").className = "pill " + h.backend;
+  $("breakers").innerHTML = Object.entries(h.breakers).map(([k, v]) => `<span class="${v}">${esc(k)}: ${v}</span>`).join("");
+  const rows = await j("/v1/decisions?limit=15");
+  $("log").innerHTML = rows.map((r) => `<tr><td>${new Date(r.ts * 1000).toLocaleTimeString()}</td><td>${esc(r.use_case)}</td>
+    <td>${esc(r.action)}</td><td>${esc(r.reason_code)}</td><td>${esc(r.backend)}</td><td>${r.latency_ms}</td>
+    <td><code>${r.state_hash.slice(0, 10)}</code></td></tr>`).join("");
+}
+
+async function chaos() {
+  try {
+    await j("/v1/chaos", { method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ fail_rate: +$("fail").value, slow_rate: +$("slow").value }) });
+  } catch (e) { alert(e.message); }
+  refresh();
+}
+
+(async () => {
+  const cat = await j("/v1/catalogue");
+  examples = await j("/v1/examples");
+  $("uc").innerHTML = cat.map((c) => `<option value="${c.use_case}">${c.use_case} (v${c.version})</option>`).join("");
+  $("uc").onchange = fillExamples;
+  $("ex").onchange = showExample;
+  $("go").onclick = decide;
+  $("chaos").onclick = chaos;
+  fillExamples();
+  refresh();
+})();
+</script>
+</body>
+</html>

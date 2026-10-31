@@ -1,0 +1,41 @@
+use_case: care.intent
+version: 1
+owner: care-ops-routing
+status: published
+model: jev-1.14.0            # pinned; never jev-latest
+timeout_ms: 400
+state_budget_tokens: 1500
+fallback: keyword_rules
+questions:
+  intent:
+    type: choice
+    instructions: Which request is the customer making in `latest_message`? Use `recent_turns` for context.
+    criteria:
+      billing_question: A question or complaint about an amount, fee or charge on the bill
+      payment_arrangement: Asks to pay later, split a payment or move a due date
+      plan_change: Asks to change, add or remove a plan, line or feature
+      device_tech_support: A phone, tablet or watch is not working as expected
+      network_coverage: Poor signal, dropped calls, slow data or no service at a location
+      activation_sim: Activating a line, a new SIM or eSIM, or moving a number onto a device
+      order_status: Asks where an order or delivery is
+      international_roaming: Using the phone while travelling outside the US
+      cancel_service: Wants to cancel service, close the account or move the number to another carrier
+      fraud_unrecognised: Reports a charge, line, order or account change the customer did not make
+      device_upgrade: Wants a new device, a trade-in or upgrade eligibility
+  in_scope:
+    type: noul
+    instructions: The customer is asking for help with a Verizon account, bill, plan, device or service.
+    criteria:
+      "true": The message asks for help with something on the customer's Verizon account or service
+      "false": The message is about something unrelated to the customer's account, such as small talk or general trivia
+  needs_human:
+    type: noul
+    instructions: The customer asks to speak with a person.
+    criteria:
+      "true": The customer explicitly asks for a person, agent, representative or supervisor
+      "false": The customer is happy to continue with the assistant
+thresholds:
+  route: 0.75          # placeholder until the reliability curve is read (L8)
+  clarify: 0.45
+  needs_human: 0.6
+  in_scope_min: 0.3
