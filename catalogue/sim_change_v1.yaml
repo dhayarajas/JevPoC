@@ -1,7 +1,7 @@
 use_case: fraud.sim_change
 version: 1
 owner: fraud-identity
-status: published
+status: retired   # kept for audit; superseded by v2
 model: jev-1.14.0
 timeout_ms: 500
 state_budget_tokens: 600
@@ -25,16 +25,7 @@ questions:
       - Several signals that a fraud analyst would review
       - Strong signals of a takeover in progress
       - Clear takeover pattern
-  recommended_action:
-    type: choice
-    instructions: Which handling fits this change request?
-    criteria:
-      allow: Normal customer behaviour, let the change go through
-      step_up: Some risk, confirm with a stronger check such as an app push
-      hold: Strong signs of takeover, stop the change
-      analyst: Unusual pattern that a fraud analyst should look at
 thresholds:
   hold: 0.8
   step_up: 0.5
   ato_hold: 3.0
-  action_confidence: 0.6   # Jev's recommended action may only raise the handling

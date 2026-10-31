@@ -440,7 +440,12 @@ class MockJev:
         self._calls = 0
 
     def ask(
-        self, state: Any, questions: dict[str, dict[str, Any]], model: str | None = None, timeout_s: float = 5.0
+        self,
+        state: Any,
+        questions: dict[str, dict[str, Any]],
+        model: str | None = None,
+        timeout_s: float = 5.0,
+        request_id: str | None = None,
     ) -> JevResponse:
         body = build_request(state, questions, model or self.model)
         seed = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()

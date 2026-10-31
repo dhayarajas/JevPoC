@@ -1,7 +1,7 @@
 use_case: noc.triage
 version: 1
 owner: noc-operations
-status: published
+status: retired   # kept for audit; superseded by v2
 model: jev-1.14.0
 timeout_ms: 1000
 state_budget_tokens: 2000
@@ -35,7 +35,7 @@ questions:
     type: noul
     instructions: "`alarms` started during or right after an entry in `recent_changes`."
 thresholds:
-  page_severity: 4.0
-  page_confidence: 0.8
+  page_severity: 3.0
+  page_confidence: 0.3
   domain_confidence: 0.5
   truck_roll: 0.7

@@ -1,7 +1,7 @@
 use_case: sales.next_best_offer
 version: 1
 owner: consumer-marketing
-status: published
+status: retired   # kept for audit; superseded by v2
 model: jev-1.14.0
 timeout_ms: 500
 state_budget_tokens: 1000
@@ -29,4 +29,3 @@ thresholds:
   open_min: 0.4
   save_desk: 2.0
   offer_confidence: 0.35
-  max_offers_30d: 2       # contact cap per customer

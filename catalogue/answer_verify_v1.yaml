@@ -1,7 +1,7 @@
 use_case: care.answer_verify
 version: 1
 owner: digital-assistant
-status: published
+status: retired   # kept for audit; superseded by v2
 model: jev-1.14.0
 timeout_ms: 400
 state_budget_tokens: 4000
@@ -33,4 +33,4 @@ questions:
 thresholds:
   consistent_min: 0.9
   answers_min: 0.6
-  promise_block: 0.1
+  promise_block: 0.3

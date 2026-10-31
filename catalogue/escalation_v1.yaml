@@ -1,10 +1,10 @@
 use_case: care.escalation
 version: 1
 owner: care-ops-quality
-status: published
+status: retired   # kept for audit; superseded by v2
 model: jev-1.14.0
 timeout_ms: 500
-state_budget_tokens: 2000
+state_budget_tokens: 1200
 fallback: keyword_rules
 questions:
   frustration:
@@ -35,6 +35,3 @@ thresholds:
   churn_alert: 0.6
   human: 0.7
   resolvable_min: 0.3
-  supervisor_frustration: 2.0
-  supervisor_churn: 0.6
-  max_alerts_per_call: 1
