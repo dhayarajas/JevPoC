@@ -91,7 +91,7 @@ def policy(resp, ctx, th):
 
 
 def fallback(ctx):
-    return f"offer:{SEGMENT_DEFAULT[ctx.get('segment', 'consumer')]}", "segment_default"
+    return "no_offer", "no_decision_no_offer"
 
 
 EXAMPLES = [

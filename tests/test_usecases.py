@@ -75,3 +75,11 @@ def test_guardrail_denylist_and_prod_write():
     th = {"safe_min": 0.9, "on_goal_min": 0.5, "loop_stop": 0.6}
     assert agent_guardrail.policy(r, agent_guardrail.EXAMPLES[1], th)[0].startswith("require_approval")
     assert agent_guardrail.policy(r, agent_guardrail.EXAMPLES[0], th)[0] == "allow"
+
+
+def test_next_best_offer_fallback_makes_no_offer():
+    from jevpoc.usecases import next_best_offer
+
+    for ex in next_best_offer.EXAMPLES:
+        action, _ = next_best_offer.fallback(ex)
+        assert action == "no_offer"
