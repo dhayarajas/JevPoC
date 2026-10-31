@@ -63,3 +63,32 @@ def auc(scores: list[float], labels: list[bool]) -> float:
 
 def pct(xs: list[float], q: float) -> float:
     return float(np.percentile(xs, q)) if xs else float("nan")
+
+
+def paired_bootstrap(a: list[bool], b: list[bool], n: int = 2000, seed: int = 0) -> dict[str, float]:
+    """Accuracy difference a - b on the same cases, with a 95% interval and one-sided p (a <= b)."""
+    rng = np.random.default_rng(seed)
+    x = np.asarray(a, float) - np.asarray(b, float)
+    idx = rng.integers(0, len(x), size=(n, len(x)))
+    diffs = x[idx].mean(axis=1)
+    return {
+        "diff": float(x.mean()),
+        "ci_low": float(np.percentile(diffs, 2.5)),
+        "ci_high": float(np.percentile(diffs, 97.5)),
+        "p_value": float((diffs <= 0).mean()),
+    }
+
+
+def coverage_curve(conf: list[float], correct: list[bool], steps: int = 20) -> list[dict]:
+    """Share of cases automated at each confidence threshold, and accuracy on that share."""
+    out = []
+    for t in np.linspace(0, 1, steps + 1):
+        kept = [c for p, c in zip(conf, correct) if p >= t]
+        out.append(
+            {
+                "threshold": float(t),
+                "coverage": len(kept) / max(1, len(conf)),
+                "accuracy": float(np.mean(kept)) if kept else 1.0,
+            }
+        )
+    return out

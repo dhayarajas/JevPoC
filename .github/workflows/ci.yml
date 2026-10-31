@@ -15,3 +15,4 @@ jobs:
       - run: ruff check . && ruff format --check .
       - run: pytest -q
       - run: python -m jevpoc.run all
+      - run: python -m jevpoc.eval.gate   # slide 46: block any Arm C metric worse by > 1 pt

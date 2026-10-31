@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from jevpoc.masking import mask
-from jevpoc.usecases.base import band
+from jevpoc.usecases.base import band, looks_like_instruction
 
 NAME = "fraud.sim_change"
 
@@ -37,6 +37,8 @@ def hard_rules(ctx: dict[str, Any]):
         return "hold", "account_fraud_flag"
     if ctx["auth_method"] == "none":
         return "hold", "no_authentication"
+    if looks_like_instruction(ctx.get("interaction_notes", "")):
+        return "hold", "instruction_like_text_in_notes"
     return None
 
 

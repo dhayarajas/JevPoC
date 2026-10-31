@@ -139,9 +139,13 @@ def l7(gw: Gateway) -> None:
 
 
 def l8() -> None:
-    from jevpoc.eval.harness import main as eval_main
+    from jevpoc.eval import gate, harness, protocol, robustness
 
-    eval_main([])
+    harness.main([])
+    protocol.main([])
+    robustness.main([])
+    if gate.main([]) != 0:
+        raise SystemExit("regression gate failed")
 
 
 def main(argv: list[str] | None = None) -> None:

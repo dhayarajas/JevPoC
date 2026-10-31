@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from jevpoc.masking import mask
+from jevpoc.usecases.base import looks_like_instruction
 
 NAME = "care.answer_verify"
 
@@ -28,6 +29,12 @@ def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:
         },
         [ctx.get("customer_name", "")],
     )
+
+
+def hard_rules(ctx: dict[str, Any]):
+    if looks_like_instruction(ctx["draft_reply"]):
+        return "hold_for_agent", "instruction_like_text_in_draft"
+    return None
 
 
 def questions(entry, ctx):

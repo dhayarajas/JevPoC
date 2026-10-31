@@ -94,6 +94,25 @@ The report at `reports/eval/report.html` has, per use case:
 
 The synthetic sets prove the harness. Before any go or no-go call, the same harness should run on a frozen sample of masked Verizon traffic labelled by Verizon reviewers.
 
+### Pilot protocol, scorecard and regression gate
+
+`python -m jevpoc.eval.protocol` follows slides 17, 24 and 46 on all four pilots: care intent, escalation, answer verification and SIM-change. `data/eval/` holds 2,000 frozen synthetic cases per pilot. Each case carries a dev/test split, a temporal period (first 60 of 90 days vs post-launch), a language tag (10% Spanish in care intent) and, on 5% of cases, a blind second label from a simulated second labeller.
+
+- Arm A is today's approach, the rules already in the code.
+- Arm B is a constrained LLM on the same question schema (`jevpoc/eval/llm_arm.py`). Set `LLM_API_KEY` and `LLM_API_URL` to call an OpenAI-compatible endpoint. Without them an offline stand-in runs, with label-only answers and list LLM price.
+- Arm C is Jev with the pinned model behind the gateway policy.
+- The report holds accuracy, macro-F1, automated share, false-action rate, ECE with a reliability curve, P50/P95, cost per 1,000, paired bootstrap (C vs A, C vs B), coverage-accuracy curves, temporal and Spanish subsets and label agreement.
+- `reports/eval/protocol.html` fills the slide 17 week-12 scorecard. The privacy and contract row stays red until the DPA, CPNI and ZDR terms are signed.
+- `python -m jevpoc.eval.gate` fails CI if any Arm C metric gets worse than `data/eval/gate_baseline.json` by more than 1 point. The baseline is keyed by backend and model. Accept a new baseline with `--update` and review it in the PR.
+
+`python -m jevpoc.eval.robustness` runs the slide 49 known-weakness tests. These are prompt injection (an injected note must never make a decision less cautious), paraphrase agreement, a state-size sweep against the catalogue budget, and Spanish routing.
+
+On the mock every number tests the protocol, not Jev or any LLM. `make l8` runs all of it.
+
+### Catalogue governance
+
+Each use case has a retired `v1` (kept for audit) and a published `v2`. Published entries need `approvals`, a `state_spec` and `eval` metadata. `catalogue/LOCK.json` stores a hash of every published or retired file, and loading fails if a locked file changes. To change a question, add `v3`, then run `python -m jevpoc.catalogue lock`. Every decision logs `question_versions`, `policy_version` (a hash of the use-case module) and the decision id, which is also sent to Jev as `X-Request-Id`. Rows older than about 13 months are purged.
+
 ## Layout
 
 ```
