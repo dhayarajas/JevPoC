@@ -5,7 +5,7 @@ status: published
 model: jev-1.14.0
 timeout_ms: 500
 state_budget_tokens: 1000
-fallback: segment_default_offer
+fallback: no_offer
 questions:
   best_offer:
     type: choice
