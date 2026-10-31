@@ -35,7 +35,7 @@ questions:
     type: noul
     instructions: "`alarms` started during or right after an entry in `recent_changes`."
 thresholds:
-  page_severity: 3.0
-  page_confidence: 0.3
+  page_severity: 4.0
+  page_confidence: 0.8
   domain_confidence: 0.5
   truck_roll: 0.7

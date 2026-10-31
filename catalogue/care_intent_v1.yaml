@@ -22,6 +22,35 @@ questions:
       cancel_service: Wants to cancel service, close the account or move the number to another carrier
       fraud_unrecognised: Reports a charge, line, order or account change the customer did not make
       device_upgrade: Wants a new device, a trade-in or upgrade eligibility
+      autopay_setup: Set up, change or stop autopay or paperless billing
+      bill_dispute: Disputes a specific charge and wants it reviewed or removed
+      refund_request: Asks for money back for a payment, deposit or returned item
+      late_fee: Asks about a late fee or a reconnection fee
+      prepaid_refill: Refill or top up a prepaid line
+      add_line: Add a new line for a family member, tablet or watch
+      remove_line: Remove or suspend one line on the account
+      number_transfer_in: Bring a phone number over from another carrier
+      port_out_pin: Asks for the number transfer PIN or account number to leave
+      account_access: Cannot log in, forgot a password or needs the account PIN reset
+      ownership_transfer: Transfer a line or account to another person
+      address_change: Change the billing or service address
+      hotspot_issue: Mobile hotspot is missing, slow or not working
+      voicemail_setup: Set up voicemail, reset its password or messages are missing
+      wifi_calling: Wi-Fi calling or texting does not work
+      home_internet_setup: Set up or install 5G or Fios home internet
+      home_internet_outage: Home internet is down or very slow
+      tv_service: A TV service, channel or set-top box problem
+      streaming_perks: Add, remove or fix a streaming perk such as Disney+ or Netflix
+      trade_in_status: Asks about trade-in credit or the status of a traded-in device
+      device_return: Return or exchange a device or accessory
+      insurance_claim: File or check a device protection or insurance claim
+      device_unlock: Unlock a device so it works with another carrier
+      lost_stolen_device: A device is lost or stolen and must be suspended or blocked
+      repair_appointment: Book or change a device repair or technician visit
+      store_appointment: Book, change or ask about a store visit
+      accessibility_services: Needs accessibility support such as TTY, large print or relay
+      discount_program: Military, first responder, nurse, teacher or employer discount
+      privacy_request: Asks for a copy of personal data, or to delete or stop sharing it
   in_scope:
     type: noul
     instructions: The customer is asking for help with a Verizon account, bill, plan, device or service.
@@ -34,8 +63,16 @@ questions:
     criteria:
       "true": The customer explicitly asks for a person, agent, representative or supervisor
       "false": The customer is happy to continue with the assistant
+  language:
+    type: choice
+    instructions: Which language does the customer write in?
+    criteria:
+      en: English
+      es: Spanish
+      other: Another language
 thresholds:
   route: 0.75          # placeholder until the reliability curve is read (L8)
-  clarify: 0.45
+  clarify: 0.5
   needs_human: 0.6
   in_scope_min: 0.3
+  language_min: 0.6     # below this the turn goes to an agent

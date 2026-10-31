@@ -15,6 +15,8 @@ from typing import Any
 _SALT = os.environ.get("JEV_MASK_SALT", "local-poc-salt").encode()
 
 PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("SECRET", re.compile(r"(?i)\b(?:bearer\s+[\w.-]{10,}|(?:sk|pk|ghp|gho|xox[abp]|AKIA)[-_A-Za-z0-9]{10,})")),
+    ("SECRET", re.compile(r"(?i)\b(?:password|passwd|secret|api[_-]?key|token)\b\s*[:=]\s*[^\s,;'\"}]+")),
     ("EMAIL", re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")),
     ("CARD", re.compile(r"\b(?:\d[ -]?){13,16}\b")),
     ("IMEI", re.compile(r"\b\d{15}\b")),

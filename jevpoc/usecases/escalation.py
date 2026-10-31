@@ -5,15 +5,19 @@ from __future__ import annotations
 from typing import Any
 
 from jevpoc.masking import mask
-from jevpoc.usecases.base import fit_turns
+from jevpoc.usecases.base import band, fit_turns
 
 NAME = "care.escalation"
 
 
 def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:
-    turns = mask(ctx["turns"], [ctx.get("customer_name", "")])
+    turns = mask(ctx["turns"][-8:], [ctx.get("customer_name", "")])
     return {
         "bot_attempts": sum(1 for t in turns if t["role"] == "bot"),
+        "hold_count": ctx.get("hold_count", 0),
+        "repeat_contact_7d": bool(ctx.get("repeat_contact_7d", False)),
+        "tenure_band": band(ctx.get("tenure_months", 0), [12, 60], ["under_1y", "1_5y", "5y_plus"]),
+        "value_tier": ctx.get("value_tier", "standard"),
         "turns": fit_turns(turns, entry.state_budget_tokens),
     }
 
@@ -32,6 +36,10 @@ def policy(resp, ctx, th):
     }
     if details["asks_for_human"] >= th["human"]:
         return "handoff:agent", "customer_asked_for_human", details
+    if fr >= th["supervisor_frustration"] and details["churn"] >= th["supervisor_churn"]:
+        if ctx.get("alerts_sent", 0) < th["max_alerts_per_call"]:
+            return "alert:supervisor", "frustrated_with_churn_language", details
+        details["alert_suppressed"] = True
     if details["churn"] >= th["churn_alert"]:
         return "handoff:retention", "churn_language", details
     if fr >= th["frustration_alert"] and details["bot_resolvable"] < th["resolvable_min"]:

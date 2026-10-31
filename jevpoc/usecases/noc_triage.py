@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from jevpoc.masking import token
 from jevpoc.usecases.base import band
 
 NAME = "noc.triage"
@@ -17,13 +18,18 @@ TEAMS = {
 }
 
 
+def site_token(element: str) -> str:
+    site, _, rest = element.partition("/")
+    return token("SITE", site) + (f"/{rest}" if rest else "")
+
+
 def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:
     seen, alarms = set(), []
     for a in sorted(ctx["alarms"], key=lambda a: a["time"]):
         key = (a["element"], a["text"])
         if key not in seen:
             seen.add(key)
-            alarms.append({"time": a["time"], "element": a["element"], "text": a["text"]})
+            alarms.append({"time": a["time"], "element": site_token(a["element"]), "text": a["text"]})
     k = ctx.get("kpis", {})
     return {
         "alarms": alarms[-20:],

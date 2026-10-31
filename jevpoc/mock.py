@@ -21,6 +21,11 @@ from jevpoc.client import JevError, JevResponse, JevTimeout, build_request
 
 # Cue phrases per question id and option (choice) or polarity (noul).
 CHOICE_CUES: dict[str, dict[str, list[str]]] = {
+    "language": {
+        "es": ["hola", "quiero", "factura", "por favor", "mi ", "no funciona", "gracias", "cuenta", "señal", "¿"],
+        "en": [" the ", " my ", " is ", " i ", "i'm", " and ", " you", "please", "what", "how"],
+        "other": ["bonjour", "merci", "obrigado", "danke", "xin chào"],
+    },
     "department": {
         "billing": ["charge", "bill", "refund", "invoice", "subscription"],
         "technical": ["error", "500", "crash", "integration", "bug", "not working"],

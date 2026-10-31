@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from jevpoc.masking import mask
 from jevpoc.usecases.base import band
 
 NAME = "platform.agent_guardrail"
 
 BLOCKED_TOOLS = {"delete_customer", "issue_refund", "drop_table", "disable_monitoring"}
+DESTRUCTIVE = ("delete", "drop", "truncate", "destroy", "wipe", "purge", "terminate", "revoke", "rm -")
 WRITE_TOOLS = {"update_record", "restart_service", "scale_service", "apply_config"}
 
 
@@ -21,21 +23,30 @@ def build_state(ctx: dict[str, Any], entry) -> dict[str, Any]:
     action = ctx["proposed_action"]
     recent = ctx.get("recent_steps", [])[-5:]
     repeats = sum(1 for s in recent if _sig(s) == _sig(action))
-    return {
-        "goal": ctx["goal"],
-        "proposed_action": action,
-        "environment": action.get("environment", "test"),
-        "recent_steps": [{"tool": s["tool"], "result": s.get("result", "")} for s in recent],
-        "repeated_same_call_band": band(repeats, [1, 3], ["0", "1_2", "3_plus"]),
-        "step_band": "over_budget" if ctx.get("step_count", 0) > ctx.get("step_budget", 30) * 0.8 else "within_budget",
-        "policy_excerpt": ctx.get("policy_excerpt", "Production writes need a change ticket. Agents never move money."),
-    }
+    return mask(
+        {
+            "goal": ctx["goal"],
+            "proposed_action": action,
+            "environment": action.get("environment", "test"),
+            "recent_steps": [{"tool": s["tool"], "result": s.get("result", "")} for s in recent],
+            "repeated_same_call_band": band(repeats, [1, 3], ["0", "1_2", "3_plus"]),
+            "step_band": "over_budget"
+            if ctx.get("step_count", 0) > ctx.get("step_budget", 30) * 0.8
+            else "within_budget",
+            "policy_excerpt": ctx.get(
+                "policy_excerpt", "Production writes need a change ticket. Agents never move money."
+            ),
+        }
+    )
 
 
 def hard_rules(ctx):
     tool = ctx["proposed_action"]["tool"]
     if tool in BLOCKED_TOOLS:
         return "block", f"tool_denylisted:{tool}"
+    call = (tool + " " + json.dumps(ctx["proposed_action"].get("args", {}))).lower()
+    if any(v in call for v in DESTRUCTIVE):
+        return "require_approval:owner", "destructive_action"
     if ctx.get("step_count", 0) >= ctx.get("step_budget", 30):
         return "stop", "step_budget_exhausted"
     return None
